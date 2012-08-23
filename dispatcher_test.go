@@ -46,7 +46,7 @@ func TestSimple(t *testing.T) {
 	websocket.Message.Send(ws, `{"name": "echo", "args": ["test"]}`)
 }
 
-func TestServerSideClose(t *testing.T) {
+func TestClientSideClose(t *testing.T) {
 	wsevents.OnClose(func(conn *wsevents.Conn, err error) {
 		if err != nil {
 			t.Error(err)
