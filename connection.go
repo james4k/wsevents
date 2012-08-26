@@ -1,6 +1,10 @@
 package wsevents
 
-import "code.google.com/p/go.net/websocket"
+import (
+	"net"
+	"time"
+	"code.google.com/p/go.net/websocket"
+)
 
 type EventHandler interface {
 	// OnOpen is called when we've accepted a new WebSocket connection
@@ -16,19 +20,26 @@ type EventHandler interface {
 }
 
 type Connection struct {
-	ws        *websocket.Conn
-	handler   EventHandler
-	onReceive <-chan jsonObj
-	onSend    chan<- jsonObj
-	onClose   chan error
+	ws      *websocket.Conn
+	handler EventHandler
+	onClose chan error
 }
 
 // Send sends a named event with a series of arguments.
 // Any type supported by the encoding/json marshaller may be used.
 func (c *Connection) Send(name string, args ...interface{}) {
-	c.onSend <- jsonObj{
-		"name": name,
-		"args": args,
+	// TODO: custom timeout with a Config struct or something
+	deadline := time.Now().Add(10 * time.Second)
+	c.ws.SetWriteDeadline(deadline)
+
+	err := websocket.JSON.Send(c.ws, jsonObj{"name": name, "args": args})
+	if err != nil {
+		if neterr, ok := err.(net.Error); ok && neterr.Temporary() {
+			// TODO: return the error instead?
+			c.handler.OnError(err)
+		} else {
+			c.handler.OnClose(err)
+		}
 	}
 }
 

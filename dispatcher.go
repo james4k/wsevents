@@ -23,22 +23,26 @@ type dispatcher struct {
 
 // Handler returns an http.Handler which sets up our event handler.
 // Note that if handler has zero event handling methods, than it will panic.
-func Handler(handler EventHandler) http.Handler {
+// onNew is an optional function that is called right after your EventHandler
+// is created, and before OnOpen. 
+func Handler(handler EventHandler, onNew func(EventHandler)) http.Handler {
 	disp := &dispatcher{}
 	disp.conns = make(map[*websocket.Conn]*Connection)
-	disp.handlerType = reflect.Indirect(reflect.ValueOf(handler)).Type()
+	disp.handlerType = reflect.ValueOf(handler).Type()
 	disp.setupEventFuncs()
 
 	wsHandler := func(ws *websocket.Conn) {
 		var closing bool
-		onReceive := make(chan jsonObj, 2)
-		onSend := make(chan jsonObj, 2)
 		onClose := make(chan error, 1)
 
-		conn := &Connection{ws, reflect.New(disp.handlerType).Interface().(EventHandler), onReceive, onSend, onClose}
+		conn := &Connection{ws, reflect.New(disp.handlerType.Elem()).Interface().(EventHandler), onClose}
 		disp.mu.Lock()
 		disp.conns[ws] = conn
 		disp.mu.Unlock()
+
+		if onNew != nil {
+			onNew(handler)
+		}
 		conn.handler.OnOpen(conn)
 
 		defer func() {
@@ -53,10 +57,9 @@ func Handler(handler EventHandler) http.Handler {
 			disp.mu.Unlock()
 			conn.handler.OnClose(closeErr)
 			ws.Close()
-			close(onReceive)
-			close(onSend)
 		}()
 
+		/*
 		go func() {
 			for {
 				select {
@@ -65,10 +68,10 @@ func Handler(handler EventHandler) http.Handler {
 						return
 					}
 
-					disp.fireEvent(conn, obj)
 				}
 			}
 		}()
+		*/
 
 		go func() {
 			for {
@@ -85,24 +88,15 @@ func Handler(handler EventHandler) http.Handler {
 					}
 					return
 				}
-				fmt.Printf("%v\n", obj)
+				fmt.Printf("firing %#v\n", obj)
 				if obj != nil {
-					onReceive <- obj
+					disp.fireEvent(conn, obj)
 				}
 			}
 		}()
 
 		for {
 			select {
-			case obj := <-onSend:
-				deadline := time.Now().Add(10 * time.Second)
-				ws.SetWriteDeadline(deadline)
-
-				err := websocket.JSON.Send(ws, obj)
-				if err != nil {
-					panic(err)
-				}
-
 			case err := <-onClose:
 				closing = true
 				if err != nil {
@@ -116,11 +110,31 @@ func Handler(handler EventHandler) http.Handler {
 	return websocket.Handler(wsHandler)
 }
 
+func methodIsValidEvent(m *reflect.Method) bool {
+	if m.PkgPath != "" || m.Name[:2] != "On" {
+		return false
+	}
+
+	switch m.Name {
+	case "OnOpen", "OnError", "OnClose":
+		return false
+	}
+
+	return true
+}
+
 func (disp *dispatcher) setupEventFuncs() {
+	if disp.handlerType.Kind() != reflect.Ptr || disp.handlerType.Elem().Kind() != reflect.Struct {
+		panic("wsevents: expected handler to be a pointer to a struct")
+	}
+
 	disp.eventFns = make(map[string]reflect.Value)
-	for i := 0; i < disp.handlerType.NumMethod(); i += 1 {
+	count := disp.handlerType.NumMethod()
+	fmt.Printf("%v has %d methods\n", disp.handlerType, count)
+	for i := 0; i < count; i += 1 {
 		method := disp.handlerType.Method(i)
-		if method.PkgPath == "" && method.Name[:2] == "On" && method.Name != "OnError" && method.Name != "OnClose" {
+		fmt.Printf("%#v\n", method)
+		if methodIsValidEvent(&method) {
 			name := strings.ToLower(method.Name[2:])
 			disp.eventFns[name] = method.Func
 		}
@@ -142,6 +156,7 @@ func (disp *dispatcher) fireEvent(conn *Connection, obj jsonObj) {
 		return
 	}
 
+	name = strings.ToLower(name)
 	fn, ok := disp.eventFns[name]
 	if !ok {
 		conn.handler.OnError(ErrUnexpectedEvent)
@@ -168,5 +183,5 @@ func (disp *dispatcher) fireEvent(conn *Connection, obj jsonObj) {
 
 	// first arg is the receiver (which is the EventHandler)
 	argvals[0] = reflect.ValueOf(conn.handler)
-	reflect.ValueOf(fn).Call(argvals)
+	fn.Call(argvals)
 }

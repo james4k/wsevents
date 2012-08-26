@@ -1,41 +1,47 @@
 package wsevents_test
 
 import (
+	"fmt"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"code.google.com/p/go.net/websocket"
-	"fmt"
 	"github.com/james4k/wsevents"
-	"time"
 )
 
+type SimpleHandler struct {
+	Conn *wsevents.Connection
+	MsgChan chan string
+}
+
+func (s *SimpleHandler) OnOpen(conn *wsevents.Connection) {
+	s.Conn = conn
+}
+
+func (s *SimpleHandler) OnError(err error) {
+	fmt.Println(err)
+}
+
+func (s *SimpleHandler) OnClose(err error) {
+	fmt.Println(err)
+}
+
+func (s *SimpleHandler) OnTestMsg(msg string) {
+	fmt.Println("before msg send")
+	s.MsgChan <- msg
+	fmt.Println("after msg send")
+}
+
 func TestSimple(t *testing.T) {
-	wsevents.OnOpen(func(conn *wsevents.Conn) {
-		conn.Data = false
-	})
+	var simpleHandler *SimpleHandler
+	msgChan := make(chan string, 1)
+	onNew := func(handler wsevents.EventHandler) {
+		simpleHandler = handler.(*SimpleHandler)
+		simpleHandler.MsgChan = msgChan
+	}
 
-	wsevents.OnClose(func(conn *wsevents.Conn, err error) {
-		if err != nil {
-			t.Error(err)
-		}
-
-		received, ok := conn.Data.(bool)
-		if !ok {
-			t.Fatal("OnOpen wasn't called")
-		} else if !received {
-			t.Fatal("echo event wasn't fired")
-		}
-	})
-
-	wsevents.OnEvent("echo", func(conn *wsevents.Conn, msg string) {
-		if msg == "test" {
-			conn.Data = true
-			conn.Close()
-		}
-	})
-
-	serv := httptest.NewServer(wsevents.Handler())
+	serv := httptest.NewServer(wsevents.Handler(&SimpleHandler{}, onNew))
 	defer serv.Close()
 
 	origin := serv.URL
@@ -45,9 +51,24 @@ func TestSimple(t *testing.T) {
 		t.Error(err)
 	}
 
-	websocket.Message.Send(ws, `{"name": "echo", "args": ["test"]}`)
-}
+	websocket.Message.Send(ws, `{"name": "testmsg", "args": ["test 123![]{}@"]}`)
 
+	fmt.Println("selecting")
+	select {
+	case msg := <-msgChan:
+		fmt.Println("received msg")
+		if msg != "test 123![]{}@" {
+			t.Fatal("message did not match!")
+		}
+		if simpleHandler.Conn == nil {
+			t.Fatal("OnOpen was not called!")
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("did not receive message!")
+	}
+	fmt.Println("end")
+}
+/*
 func TestClientSideClose(t *testing.T) {
 	wsevents.OnClose(func(conn *wsevents.Conn, err error) {
 		if err != nil {
@@ -74,3 +95,4 @@ func TestClientSideClose(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	fmt.Println("close")
 }
+*/
