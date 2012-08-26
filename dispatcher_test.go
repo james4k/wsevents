@@ -4,8 +4,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/james4k/wsevents"
 	"code.google.com/p/go.net/websocket"
+	"fmt"
+	"github.com/james4k/wsevents"
+	"time"
 )
 
 func TestSimple(t *testing.T) {
@@ -68,5 +70,7 @@ func TestClientSideClose(t *testing.T) {
 	}
 
 	websocket.Message.Send(ws, `{"name": "echo", "args": ["test"]}`)
-}
 
+	time.Sleep(100 * time.Millisecond)
+	fmt.Println("close")
+}
