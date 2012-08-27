@@ -7,7 +7,6 @@ import (
 )
 
 var (
-	ErrUnknown                = errors.New("wsevents: unknown error")
 	ErrUnexpectedEvent        = errors.New("wsevents: unexpected event")
 	ErrMissingEventName       = errors.New("wsevents: missing event name in json object")
 	ErrMissingEventArgs       = errors.New("wsevents: missing event args in json object")

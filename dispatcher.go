@@ -21,7 +21,7 @@ type dispatcher struct {
 
 // Handler returns an http.Handler which sets up our event handler. 
 //
-// dummy expects a pointer to an empty instance of a struct that implements
+// dummy should be a pointer to an empty instance of a struct that implements
 // EventHandler. It is used to get the type information of the struct. If the
 // struct has zero event handling methods, than it will panic.
 //
