@@ -1,7 +1,7 @@
 package wsevents_test
 
 import (
-	"fmt"
+	//"fmt"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -11,37 +11,47 @@ import (
 )
 
 type SimpleHandler struct {
-	Conn *wsevents.Connection
-	MsgChan chan string
+	*wsevents.Connection
+	MsgChan   chan string
+	CloseChan chan bool
 }
 
 func (s *SimpleHandler) OnOpen(conn *wsevents.Connection) {
-	s.Conn = conn
+	s.Connection = conn
 }
 
 func (s *SimpleHandler) OnError(err error) {
-	fmt.Println(err)
+	panic(err)
 }
 
 func (s *SimpleHandler) OnClose(err error) {
-	fmt.Println(err)
+	if s.CloseChan != nil {
+		s.CloseChan <- true
+	} else {
+		panic(err)
+	}
 }
 
 func (s *SimpleHandler) OnTestMsg(msg string) {
-	fmt.Println("before msg send")
+	s.Close()
 	s.MsgChan <- msg
-	fmt.Println("after msg send")
 }
 
 func TestSimple(t *testing.T) {
 	var simpleHandler *SimpleHandler
-	msgChan := make(chan string, 1)
+	msgChan := make(chan string)
 	onNew := func(handler wsevents.EventHandler) {
-		simpleHandler = handler.(*SimpleHandler)
+		var ok bool
+		simpleHandler, ok = handler.(*SimpleHandler)
+		if !ok {
+			t.Fatal("handler was not a *SimpleHandler")
+		}
+
 		simpleHandler.MsgChan = msgChan
 	}
 
 	serv := httptest.NewServer(wsevents.Handler(&SimpleHandler{}, onNew))
+	defer serv.CloseClientConnections()
 	defer serv.Close()
 
 	origin := serv.URL
@@ -53,46 +63,49 @@ func TestSimple(t *testing.T) {
 
 	websocket.Message.Send(ws, `{"name": "testmsg", "args": ["test 123![]{}@"]}`)
 
-	fmt.Println("selecting")
 	select {
 	case msg := <-msgChan:
-		fmt.Println("received msg")
 		if msg != "test 123![]{}@" {
 			t.Fatal("message did not match!")
 		}
-		if simpleHandler.Conn == nil {
+		if simpleHandler.Connection == nil {
 			t.Fatal("OnOpen was not called!")
 		}
 	case <-time.After(1 * time.Second):
 		t.Fatal("did not receive message!")
 	}
-	fmt.Println("end")
 }
-/*
+
 func TestClientSideClose(t *testing.T) {
-	wsevents.OnClose(func(conn *wsevents.Conn, err error) {
-		if err != nil {
-			t.Error(err)
+	var simpleHandler *SimpleHandler
+	closeChan := make(chan bool)
+	onNew := func(handler wsevents.EventHandler) {
+		var ok bool
+		simpleHandler, ok = handler.(*SimpleHandler)
+		if !ok {
+			t.Fatal("handler was not a *SimpleHandler")
 		}
-	})
 
-	wsevents.OnEvent("echo", func(conn *wsevents.Conn, msg string) {
-	})
+		simpleHandler.CloseChan = closeChan
+	}
 
-	serv := httptest.NewServer(wsevents.Handler())
-	defer serv.Close()
-	defer serv.CloseClientConnections()
+	serv := httptest.NewServer(wsevents.Handler(&SimpleHandler{}, onNew))
 
 	origin := serv.URL
 	url := "ws" + serv.URL[4:]
-	ws, err := websocket.Dial(url, "", origin)
+	_, err := websocket.Dial(url, "", origin)
 	if err != nil {
 		t.Error(err)
 	}
 
-	websocket.Message.Send(ws, `{"name": "echo", "args": ["test"]}`)
+	serv.CloseClientConnections()
 
-	time.Sleep(100 * time.Millisecond)
-	fmt.Println("close")
+	select {
+	case <-closeChan:
+		if simpleHandler.Connection == nil {
+			t.Fatal("OnOpen was not called!")
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("did not get notified of close!")
+	}
 }
-*/

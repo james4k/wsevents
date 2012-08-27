@@ -1,9 +1,9 @@
 package wsevents
 
 import (
+	"code.google.com/p/go.net/websocket"
 	"net"
 	"time"
-	"code.google.com/p/go.net/websocket"
 )
 
 type EventHandler interface {
@@ -22,6 +22,7 @@ type EventHandler interface {
 type Connection struct {
 	ws      *websocket.Conn
 	handler EventHandler
+	closing bool
 	onClose chan error
 }
 

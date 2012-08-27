@@ -14,18 +14,13 @@ var (
 	ErrEventArgsCountMismatch = errors.New("wsevents: number of event method args didn't match received")
 )
 
-type TypeMismatchError struct {
-	Expected reflect.Type
-	Actual   reflect.Type
-}
-
-func (e TypeMismatchError) Error() string {
-	return fmt.Sprintf("wsevents: type mismatch (expected %v, got %v)", e.Expected, e.Actual)
-}
-
 type ArgsMismatchError struct {
 	Expected []reflect.Kind
 	Actual   []reflect.Kind
+}
+
+func (e ArgsMismatchError) Error() string {
+	return fmt.Sprintf("wsevents: type mismatch (args %v, got %v)", e.Expected, e.Actual)
 }
 
 func MakeArgsMismatchError(fn reflect.Type, jsargs []interface{}) *ArgsMismatchError {
@@ -42,8 +37,4 @@ func MakeArgsMismatchError(fn reflect.Type, jsargs []interface{}) *ArgsMismatchE
 	}
 
 	return &ArgsMismatchError{expected, actual}
-}
-
-func (e ArgsMismatchError) Error() string {
-	return fmt.Sprintf("wsevents: type mismatch (args %v, got %v)", e.Expected, e.Actual)
 }

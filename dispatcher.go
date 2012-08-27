@@ -1,8 +1,6 @@
 package wsevents
 
 import (
-	//"errors"
-	"fmt"
 	"net/http"
 	"reflect"
 	"strings"
@@ -25,23 +23,25 @@ type dispatcher struct {
 // Note that if handler has zero event handling methods, than it will panic.
 // onNew is an optional function that is called right after your EventHandler
 // is created, and before OnOpen. 
-func Handler(handler EventHandler, onNew func(EventHandler)) http.Handler {
+func Handler(handlerDummy EventHandler, onNew func(EventHandler)) http.Handler {
 	disp := &dispatcher{}
 	disp.conns = make(map[*websocket.Conn]*Connection)
-	disp.handlerType = reflect.ValueOf(handler).Type()
+	disp.handlerType = reflect.ValueOf(handlerDummy).Type()
 	disp.setupEventFuncs()
 
 	wsHandler := func(ws *websocket.Conn) {
-		var closing bool
-		onClose := make(chan error, 1)
-
-		conn := &Connection{ws, reflect.New(disp.handlerType.Elem()).Interface().(EventHandler), onClose}
+		conn := &Connection{
+			ws: ws,
+			handler: reflect.New(disp.handlerType.Elem()).Interface().(EventHandler),
+			closing: false,
+			onClose: make(chan error),
+		}
 		disp.mu.Lock()
 		disp.conns[ws] = conn
 		disp.mu.Unlock()
 
 		if onNew != nil {
-			onNew(handler)
+			onNew(conn.handler)
 		}
 		conn.handler.OnOpen(conn)
 
@@ -55,59 +55,55 @@ func Handler(handler EventHandler, onNew func(EventHandler)) http.Handler {
 			disp.mu.Lock()
 			delete(disp.conns, ws)
 			disp.mu.Unlock()
+
+			// FIXME: Need to avoid the "use of closed network connection" error
+			// Or does this only occur in local tests?
 			conn.handler.OnClose(closeErr)
-			ws.Close()
 		}()
 
-		/*
-		go func() {
-			for {
-				select {
-				case obj, ok := <-onReceive:
-					if !ok {
-						return
-					}
+		// TODO: See if a separate goroutine for firing events would be more performant..?
+		// Probably not, since that's an extra goroutine per connection. But, it would
+		// allow some buffering of events.
 
-				}
+		go disp.readUntilClose(conn)
+		disp.waitForClose(conn)
+	}
+	return websocket.Handler(wsHandler)
+}
+
+func (disp *dispatcher) readUntilClose(conn *Connection) {
+	for {
+		deadline := time.Now().Add(2 * time.Minute)
+		conn.ws.SetReadDeadline(deadline)
+
+		var obj jsonObj
+		err := websocket.JSON.Receive(conn.ws, &obj)
+		if err != nil {
+			if !conn.closing {
+				conn.onClose <- err
 			}
-		}()
-		*/
+			return
+		}
 
-		go func() {
-			for {
-				deadline := time.Now().Add(2 * time.Minute)
-				ws.SetReadDeadline(deadline)
+		if obj != nil {
+			disp.fireEvent(conn, obj)
+		}
+	}
+}
 
-				var obj jsonObj
-				fmt.Println("read")
-				err := websocket.JSON.Receive(ws, &obj)
-				if err != nil {
-					fmt.Printf("err: %v\n", err)
-					if !closing {
-						onClose <- err
-					}
-					return
-				}
-				fmt.Printf("firing %#v\n", obj)
-				if obj != nil {
-					disp.fireEvent(conn, obj)
-				}
-			}
-		}()
-
-		for {
-			select {
-			case err := <-onClose:
-				closing = true
-				if err != nil {
-					panic(err)
-				} else {
-					return
-				}
+func (disp *dispatcher) waitForClose(conn *Connection) {
+	for {
+		select {
+		case err := <-conn.onClose:
+			// FIXME: may need to access/set conn.closing atomically
+			conn.closing = true
+			if err != nil {
+				panic(err)
+			} else {
+				return
 			}
 		}
 	}
-	return websocket.Handler(wsHandler)
 }
 
 func methodIsValidEvent(m *reflect.Method) bool {
@@ -130,10 +126,8 @@ func (disp *dispatcher) setupEventFuncs() {
 
 	disp.eventFns = make(map[string]reflect.Value)
 	count := disp.handlerType.NumMethod()
-	fmt.Printf("%v has %d methods\n", disp.handlerType, count)
 	for i := 0; i < count; i += 1 {
 		method := disp.handlerType.Method(i)
-		fmt.Printf("%#v\n", method)
 		if methodIsValidEvent(&method) {
 			name := strings.ToLower(method.Name[2:])
 			disp.eventFns[name] = method.Func
