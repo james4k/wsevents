@@ -28,6 +28,7 @@ type dispatcher struct {
 // onNew is an optional function that is called right after the struct is
 // created, and before OnOpen.
 //
+//	http.Handle("/socket", wsevents.Handler(&ExampleHandler{}, nil))
 // 
 func Handler(dummy EventHandler, onNew func(EventHandler)) http.Handler {
 	disp := &dispatcher{}
