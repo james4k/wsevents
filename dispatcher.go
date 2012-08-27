@@ -20,13 +20,18 @@ type dispatcher struct {
 }
 
 // Handler returns an http.Handler which sets up our event handler.
-// Note that if handler has zero event handling methods, than it will panic.
-// onNew is an optional function that is called right after your EventHandler
-// is created, and before OnOpen. 
-func Handler(handlerDummy EventHandler, onNew func(EventHandler)) http.Handler {
+//
+// dummy expects a pointer to an empty instance of a struct that implements
+// EventHandler. It is used to get the type information of the struct.
+//
+// onNew is an optional function that is called right after the struct is
+// created, and before OnOpen.
+//
+// If handler has zero event handling methods, than it will panic.
+func Handler(dummy EventHandler, onNew func(EventHandler)) http.Handler {
 	disp := &dispatcher{}
 	disp.conns = make(map[*websocket.Conn]*Connection)
-	disp.handlerType = reflect.ValueOf(handlerDummy).Type()
+	disp.handlerType = reflect.ValueOf(dummy).Type()
 	disp.setupEventFuncs()
 
 	wsHandler := func(ws *websocket.Conn) {

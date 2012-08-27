@@ -16,26 +16,26 @@ import (
 //	}
 //
 type EventHandler interface {
-	// OnOpen is called when we've accepted a new WebSocket connection
-	// A new instance of the event handler was created just before now.
+	// OnOpen is called when a new WebSocket connection is accepted.  A new
+	// instance of the event handler was created just before now.
 	OnOpen(*Connection)
 
-	// OnError is called when we've encountered a recoverable error
+	// OnError is called when a recoverable error was encountered.
 	OnError(error)
 
-	// OnClose is called when the connection is closed or we've encountered
-	// an unrecoverable error.
+	// OnClose is called when the connection is closed or an unrecoverable error
+	// was encountered.
 	OnClose(error)
 }
 
-// Connection holds the underlying WebSocket connection. It is passed to you
+// Connection holds the underlying WebSocket connection. It is passed through
 // when OnOpen is called, and is what is used to Send events to the client, as
 // well as Close the connection. 
 //
-// To make things simple, you can add the Connection as an anonymous field for
-// easy access to Send and Close.
+// To make things simple, add the Connection as an anonymous field for easy
+// access to Send and Close.
 //
-//	type ExampleHandler {
+//	type ExampleHandler struct {
 //		*wsevents.Connection
 //		...
 //	}
