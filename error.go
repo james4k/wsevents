@@ -11,7 +11,6 @@ var (
 	ErrUnexpectedEvent        = errors.New("wsevents: unexpected event")
 	ErrMissingEventName       = errors.New("wsevents: missing event name in json object")
 	ErrMissingEventArgs       = errors.New("wsevents: missing event args in json object")
-	ErrEventArgsCountMismatch = errors.New("wsevents: number of event method args didn't match received")
 )
 
 type ArgsMismatchError struct {
