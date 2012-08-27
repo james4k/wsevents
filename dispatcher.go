@@ -19,15 +19,16 @@ type dispatcher struct {
 	mu          sync.Mutex
 }
 
-// Handler returns an http.Handler which sets up our event handler.
+// Handler returns an http.Handler which sets up our event handler. 
 //
 // dummy expects a pointer to an empty instance of a struct that implements
-// EventHandler. It is used to get the type information of the struct.
+// EventHandler. It is used to get the type information of the struct. If the
+// struct has zero event handling methods, than it will panic.
 //
 // onNew is an optional function that is called right after the struct is
 // created, and before OnOpen.
 //
-// If handler has zero event handling methods, than it will panic.
+// 
 func Handler(dummy EventHandler, onNew func(EventHandler)) http.Handler {
 	disp := &dispatcher{}
 	disp.conns = make(map[*websocket.Conn]*Connection)
