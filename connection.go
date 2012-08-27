@@ -6,9 +6,9 @@ import (
 	"time"
 )
 
-// EventHandler is what the struct must implement to receive events. All of the
+// EventHandler is what a struct must implement to receive events. All of the
 // struct's methods that have the "On" prefix, except those that are a member of
-// EventHandler, may receive events of that name. For example the named event
+// EventHandler, may receive events of that name. For example, for a named event
 // "msg" that passes the arguments (int, string), it may be implemented as:
 //
 //	func (e *ExampleHandler) OnMsg(id int, text string) {
@@ -28,6 +28,23 @@ type EventHandler interface {
 	OnClose(error)
 }
 
+// Connection holds the underlying WebSocket connection. It is passed to you
+// when OnOpen is called, and is what is used to Send events to the client, as
+// well as Close the connection. 
+//
+// To make things simple, you can add the Connection as an anonymous field for
+// easy access to Send and Close.
+//
+//	type ExampleHandler {
+//		*wsevents.Connection
+//		...
+//	}
+//	
+//	func (e *ExampleHandler) OnOpen (conn *wsevents.Connection) {
+//		e.Connection = conn
+//		e.Send("msg", arg1, arg2, etc)
+//	}
+//
 type Connection struct {
 	ws      *websocket.Conn
 	handler EventHandler
