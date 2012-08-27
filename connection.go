@@ -6,6 +6,15 @@ import (
 	"time"
 )
 
+// EventHandler is what the struct must implement to receive events. All of the
+// struct's methods that have the "On" prefix, except those that are a member of
+// EventHandler, may receive events of that name. For example the named event
+// "msg" that passes the arguments (int, string), it may be implemented as:
+//
+//	func (e *ExampleHandler) OnMsg(id int, text string) {
+//		...
+//	}
+//
 type EventHandler interface {
 	// OnOpen is called when we've accepted a new WebSocket connection
 	// A new instance of the event handler was created just before now.

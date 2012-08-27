@@ -112,7 +112,7 @@ func methodIsValidEvent(m *reflect.Method) bool {
 	}
 
 	switch m.Name {
-	case "OnOpen", "OnError", "OnClose", "Send", "Close":
+	case "OnOpen", "OnError", "OnClose":
 		return false
 	}
 
