@@ -23,7 +23,7 @@ func (e ArgsMismatchError) Error() string {
 	return fmt.Sprintf("wsevents: type mismatch (args %v, got %v)", e.Expected, e.Actual)
 }
 
-func MakeArgsMismatchError(fn reflect.Type, jsargs []interface{}) *ArgsMismatchError {
+func makeArgsMismatchError(fn reflect.Type, jsargs []interface{}) *ArgsMismatchError {
 	count := fn.NumIn()
 	expected := make([]reflect.Kind, 0, count-1)
 	for i := 1; i < count; i += 1 {

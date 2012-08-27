@@ -112,7 +112,7 @@ func methodIsValidEvent(m *reflect.Method) bool {
 	}
 
 	switch m.Name {
-	case "OnOpen", "OnError", "OnClose":
+	case "OnOpen", "OnError", "OnClose", "Send", "Close":
 		return false
 	}
 
@@ -161,14 +161,14 @@ func (disp *dispatcher) fireEvent(conn *Connection, obj jsonObj) {
 	fntype := fn.Type()
 	count := fntype.NumIn()
 	if len(args) != count-1 {
-		conn.handler.OnError(MakeArgsMismatchError(fntype, args))
+		conn.handler.OnError(makeArgsMismatchError(fntype, args))
 		return
 	}
 
 	argvals := make([]reflect.Value, count)
 	for i := 1; i < count; i += 1 {
 		if !reflect.TypeOf(args[i-1]).AssignableTo(fntype.In(i)) {
-			conn.handler.OnError(MakeArgsMismatchError(fntype, args))
+			conn.handler.OnError(makeArgsMismatchError(fntype, args))
 			return
 		}
 
